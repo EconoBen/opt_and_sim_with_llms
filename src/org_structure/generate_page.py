@@ -19,16 +19,19 @@ def generate_employee(
     designation: str, department: str, max_depth: int, current_depth: int = 0
 ) -> dict:
     employee = {
+        "id": generate_employee_id(),
         "designation": designation,
         "department": department,
         "manager": None,
         "team_members": [],
     }  # type: ignore
+
     if current_depth < max_depth:
         employee["manager"] = {
             "id": generate_employee_id(),
             "workEmail": generate_work_email(designation),  # type: ignore
         }  # type: ignore
+
     return employee
 
 
