@@ -10,7 +10,7 @@ from src.duck import DBDuck
 def execute_query(
     query: PosixPath | str,
     data: DataFrame | None = None,
-    params: dict[str, int | str] | None = None,
+    params: dict[str, int | str | list] | None = None,
 ) -> DataFrame:
     """Generic function to query the DuckDB database.
     Args:
@@ -25,6 +25,7 @@ def execute_query(
             quack.register("data", data)
 
         query = query.read_text() if isinstance(query, PosixPath) else query
+
         return DataFrame(
             quack.execute(query, params).fetch_arrow_table(),
             orient="row",

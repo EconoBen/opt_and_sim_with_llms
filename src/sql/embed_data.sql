@@ -5,6 +5,7 @@ CREATE OR REPLACE TABLE onet_with_embeddings AS
 SELECT
     data.index AS ONET_INDEX,
     data.titles AS ONET_TITLES,
+    data.onetsoc_code AS ONET_ONETSOC_CODE,
     data.descriptions AS ONET_DESCRIPTIONS,
     data.median_salary AS MEDIAN_SALARY,
     data.titles_embeddings AS TITLE_EMBEDDINGS,

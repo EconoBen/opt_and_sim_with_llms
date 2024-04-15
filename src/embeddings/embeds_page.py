@@ -1,10 +1,13 @@
 """This module contains the Streamlit page for the embeddings pipeline."""
 
+from pathlib import Path
+
 import streamlit as st
 from polars import DataFrame, concat
 
 from src.duck import DBDuck
 from src.embeddings.embed_data import EmbedsPipeline
+from src.query_db import execute_query
 from src.schemas.db_settings import DBSettings
 from src.schemas.model import ModelSettings
 from src.schemas.sql import SQLModel
@@ -22,6 +25,9 @@ def embeddings_page() -> None:
 
     if "job_embeds" not in st.session_state:
         st.session_state.job_embeds = None
+
+    if "skills" not in st.session_state:
+        st.session_state.skills = None
 
     model_version = st.sidebar.selectbox(
         "Select an embeddings model:",
@@ -62,13 +68,15 @@ def embeddings_page() -> None:
             if st.session_state.job_embeds is not None:
                 with DBDuck() as quack:
                     quack.register("j_embeds", st.session_state.job_embeds)
-                    query_result = quack.execute("""
+                    query_result = DataFrame(
+                        quack.execute("""
                         WITH job_embeds_cte AS (
                             SELECT jobtitle, jobtitle_embeddings
                             FROM j_embeds
                         )
                         SELECT
                             job_embeds_cte.jobtitle AS entered_job,
+                            onet.ONET_ONETSOC_CODE,
                             onet.ONET_TITLES AS similar_job,
                             list_cosine_similarity(job_embeds_cte.jobtitle_embeddings, onet.TITLE_EMBEDDINGS) AS similarity,
                             onet.MEDIAN_SALARY AS median_salary
@@ -77,6 +85,21 @@ def embeddings_page() -> None:
                             CROSS JOIN onet_with_embeddings AS onet
                         ORDER BY similarity DESC
                         LIMIT 5
-                    """)
+                    """).fetch_arrow_table()
+                    )
                     st.write("Top 5 Similar Job Titles:")
-                    st.table(query_result.df())
+                    st.table(query_result)
+                    st.session_state.skills = query_result[
+                        "ONET_ONETSOC_CODE"
+                    ].to_list()
+
+                if st.session_state.skills is not None:
+                    with st.spinner("Let's get a little more specific..."):
+                        st.write("Skills Asscoiated with the Top 5 Similar Job Titles:")
+                        path = Path("src/sql/get_skills_by_onet.sql")
+                        execute_query(
+                            path,  # type: ignore
+                            data=None,
+                            params={"ONET_CODE": st.session_state.skills},
+                        )
+                        st.table(DataFrame(query_result))
