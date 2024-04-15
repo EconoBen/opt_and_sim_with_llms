@@ -1,3 +1,6 @@
+src/duck.py
+
+notebooks/*.ipynb
 .env
 data/
 .venv/
