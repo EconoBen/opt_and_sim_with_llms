@@ -131,82 +131,84 @@ def plot_bar_charts(metrics_before: dict, metrics_after: dict) -> None:
 
     fig, axes = plt.subplots(3, 1, figsize=(10, 18))
 
-    # Settings for side-by-side bars
+    # Ensure we account for the maximum number of entries in both before and after datasets
+    max_entries = max(
+        len(df_before["avg_priority_per_employee"]),
+        len(df_after["avg_priority_per_employee"]),
+    )
     bar_width = 0.35
-    r1 = np.arange(len(df_before["avg_priority_per_employee"]))
+    r1 = np.arange(max_entries)
     r2 = [x + bar_width for x in r1]
 
-    # Average Priority Per Employee
-    axes[0].bar(
-        r1,
-        df_before["avg_priority_per_employee"]["avg_priority"],
-        color="blue",
-        width=bar_width,
-        edgecolor="grey",
-        label="Before Optimization",
-    )
-    axes[0].bar(
-        r2,
-        df_after["avg_priority_per_employee"]["avg_priority"],
-        color="red",
-        width=bar_width,
-        edgecolor="grey",
-        label="After Optimization",
-    )
-    axes[0].set_xlabel("Employee ID", fontweight="bold")
-    axes[0].set_ylabel("Average Priority")
-    axes[0].set_title("Average Ticket Priority Per Employee")
-    axes[0].set_xticks([r + bar_width / 2 for r in range(len(r1))])
-    axes[0].set_xticklabels(df_before["avg_priority_per_employee"]["assigned_to"])
-    axes[0].legend()
+    # Define a helper function to safely get data
+    def safe_get(df, index, column):  # type: ignore
+        try:
+            return df[index][column]
+        except IndexError:
+            return 0  # return 0 if index is out of bounds
 
-    # Total Tickets Per Department
-    axes[1].bar(
-        r1,
-        df_before["total_tickets_per_department"]["total_tickets"],
-        color="blue",
-        width=bar_width,
-        edgecolor="grey",
-        label="Before Optimization",
-    )
-    axes[1].bar(
-        r2,
-        df_after["total_tickets_per_department"]["total_tickets"],
-        color="red",
-        width=bar_width,
-        edgecolor="grey",
-        label="After Optimization",
-    )
-    axes[1].set_xlabel("Department", fontweight="bold")
-    axes[1].set_ylabel("Total Tickets")
-    axes[1].set_title("Total Tickets Per Department")
-    axes[1].set_xticks([r + bar_width / 2 for r in range(len(r1))])
-    axes[1].set_xticklabels(df_before["total_tickets_per_department"]["department"])
-    axes[1].legend()
-
-    # Employees Per Department
-    axes[2].bar(
-        r1,
-        df_before["employees_per_department"]["unique_employees"],
-        color="blue",
-        width=bar_width,
-        edgecolor="grey",
-        label="Before Optimization",
-    )
-    axes[2].bar(
-        r2,
-        df_after["employees_per_department"]["unique_employees"],
-        color="red",
-        width=bar_width,
-        edgecolor="grey",
-        label="After Optimization",
-    )
-    axes[2].set_xlabel("Department", fontweight="bold")
-    axes[2].set_ylabel("Number of Employees")
-    axes[2].set_title("Unique Employees Per Department")
-    axes[2].set_xticks([r + bar_width / 2 for r in range(len(r1))])
-    axes[2].set_xticklabels(df_before["employees_per_department"]["department"])
-    axes[2].legend()
+    # Plot each metric
+    for ax, metric_key, title in zip(
+        axes,
+        [
+            "avg_priority_per_employee",
+            "total_tickets_per_department",
+            "employees_per_department",
+        ],
+        [
+            "Average Ticket Priority Per Employee",
+            "Total Tickets Per Department",
+            "Unique Employees Per Department",
+        ],
+    ):
+        # Plot before optimization
+        ax.bar(
+            r1,
+            [
+                safe_get(
+                    df_before[metric_key],
+                    i,
+                    "avg_priority"
+                    if "avg_priority" in df_before[metric_key].columns
+                    else "total_tickets"
+                    if "total_tickets" in df_before[metric_key].columns
+                    else "unique_employees",
+                )
+                for i in range(max_entries)
+            ],
+            color="blue",
+            width=bar_width,
+            edgecolor="grey",
+            label="Before Optimization",
+        )
+        # Plot after optimization
+        ax.bar(
+            r2,
+            [
+                safe_get(
+                    df_after[metric_key],
+                    i,
+                    "avg_priority"
+                    if "avg_priority" in df_after[metric_key].columns
+                    else "total_tickets"
+                    if "total_tickets" in df_after[metric_key].columns
+                    else "unique_employees",
+                )
+                for i in range(max_entries)
+            ],
+            color="red",
+            width=bar_width,
+            edgecolor="grey",
+            label="After Optimization",
+        )
+        ax.set_title(title)
+        ax.set_xticks([r + bar_width / 2 for r in r1])
+        ax.set_xticklabels(
+            df_before[metric_key]["department"]
+            if "department" in df_before[metric_key].columns
+            else df_before[metric_key]["assigned_to"]
+        )
+        ax.legend()
 
     st.pyplot(fig)
 
@@ -250,48 +252,78 @@ def generate_plots(tickets_before: DataFrame, tickets_after: DataFrame) -> None:
 def generate_optimization_page(org_structure: dict) -> None:
     st.title("Team Composition Optimization")
 
-    # Generate tickets
-    tickets: DataFrame | None = generate_tickets_page(org_structure)
+    if "init" not in st.session_state:
+        st.session_state.init = False
+        st.session_state.tickets = None
+        st.session_state.constraints = {}
 
-    if tickets is None:
-        return
+    # Setup form for initializing ticket generation and optimization constraints
+    with st.form("Initialization Form"):
+        st.subheader("Initialize Tickets and Set Constraints")
 
-    # Get unique departments from tickets
-    departments = tickets["department"].unique()
+        # Placeholder for other settings, assuming you might need some configurations for generating tickets
+        generate_tickets = st.checkbox("Generate Tickets", value=st.session_state.init)
 
-    # Define optimization constraints
-    constraints = {
-        "max_tickets_per_employee": st.sidebar.slider(
+        # Constraints for optimization
+        max_tickets = st.slider(
             "Maximum Tickets per Employee", min_value=1, max_value=10, value=5
-        ),
-        "max_ticket_priority_sum_per_employee": st.sidebar.slider(
+        )
+        max_priority_sum = st.slider(
             "Maximum Ticket Priority Sum per Employee",
             min_value=1,
             max_value=20,
             value=10,
-        ),
-        "min_employees_per_department": st.sidebar.slider(
+        )
+        min_employees = st.slider(
             "Minimum Employees per Department", min_value=1, max_value=5, value=2
-        ),
-    }
-    for dept in departments:
-        constraints[f"min_{dept}_tickets"] = st.sidebar.slider(
-            f"Minimum {dept} Tickets", min_value=0, max_value=10, value=2
         )
 
-    # Optimize team composition
-    tickets = tickets.with_columns(arange(0, count()).alias("index"))
-    tickets = tickets.sort("index", descending=False)
-    optimal_team_df = optimize_team_composition(tickets, constraints)
+        # Form submission button
+        submitted = st.form_submit_button("Initialize and Optimize")
 
-    st.write("Optimal Team Composition:")
-    st.dataframe(optimal_team_df)
+        if submitted:
+            st.session_state.init = generate_tickets
+            st.session_state.constraints = {
+                "max_tickets_per_employee": max_tickets,
+                "max_ticket_priority_sum_per_employee": max_priority_sum,
+                "min_employees_per_department": min_employees,
+            }
 
-    # Generate fake data
-    fake_tickets = generate_fake_data(optimal_team_df)
+    # If tickets are to be generated
+    if st.session_state.init:
+        # Generate tickets
+        st.session_state.tickets = generate_tickets_page(org_structure)
 
-    # # Calculate metrics before and after optimization
-    # fake_metrics = calculate_metrics(fake_tickets)
-    # optimal_metrics = calculate_metrics(optimal_team_df)
+        if st.session_state.tickets is None:
+            st.write("No tickets found.")
+        else:
+            # Display unique departments from tickets
+            # departments = st.session_state.tickets["department"].unique()
+            # for dept in departments:
+            #     dept_key = f"min_{dept}_tickets"
+            #     if dept_key not in st.session_state.constraints:
+            #         st.session_state.constraints[dept_key] = st.sidebar.slider(
+            #             f"Minimum {dept} Tickets", min_value=0, max_value=10, value=2
+            #         )
 
-    generate_plots(fake_tickets, optimal_team_df)
+            # Check if the optimization should be triggered
+            if "constraints" in st.session_state and st.session_state.constraints:
+                # Optimize team composition
+                st.session_state.tickets = st.session_state.tickets.with_columns(
+                    arange(0, count()).alias("index")
+                )
+                st.session_state.tickets = st.session_state.tickets.sort(
+                    "index", descending=False
+                )
+                optimized_tickets = optimize_team_composition(
+                    st.session_state.tickets, st.session_state.constraints
+                )
+
+                st.write("Optimal Team Composition:")
+                st.dataframe(optimized_tickets)
+
+                # Generate fake data
+                # fake_tickets = generate_fake_data(optimized_tickets)
+
+                # # Generate plots based on fake and optimized data
+                # generate_plots(fake_tickets, optimized_tickets)
