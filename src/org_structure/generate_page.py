@@ -29,6 +29,7 @@ def generate_employee(
     if current_depth < max_depth:
         employee["manager"] = {
             "id": generate_employee_id(),
+            "department": department,
             "workEmail": generate_work_email(designation),  # type: ignore
         }  # type: ignore
 

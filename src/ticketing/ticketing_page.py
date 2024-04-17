@@ -116,6 +116,8 @@ async def generate_tickets_for_organization(org_structure: dict) -> DataFrame:
                     "created_at": ticket.created_at,
                     "due_date": ticket.due_date,
                     "completed_at": ticket.completed_at,
+                    "designation": employee["designation"],
+                    "department": employee["department"],
                 }
             )
         for team_member in employee.get("team_members", []):
@@ -150,12 +152,14 @@ def generate_api_response(tickets: DataFrame) -> dict:
     }
 
 
-def generate_tickets_page(org_structure: dict) -> None:
+def generate_tickets_page(org_structure: dict) -> DataFrame | None:
     if len(org_structure) == 0:
-        pass
+        return None
     else:
         tickets = asyncio.run(generate_tickets_for_organization(org_structure))
         st.dataframe(tickets)
         api_response = generate_api_response(tickets)
         with st.container():
             st.json(api_response)
+
+        return DataFrame(tickets)

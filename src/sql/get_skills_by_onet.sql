@@ -11,6 +11,6 @@ filtered_task_to_dwas AS (
     SELECT UNNEST($ONET_CODE)
   )
 )
-SELECT dwas.*, filtered_task_to_dwas.*
+SELECT DISTINCT dwas."DWA Title" AS "Associated Skills"
 FROM dwas
 INNER JOIN filtered_task_to_dwas ON dwas."DWA ID" = filtered_task_to_dwas."DWA ID";

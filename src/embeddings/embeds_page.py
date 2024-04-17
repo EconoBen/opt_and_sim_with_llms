@@ -97,9 +97,9 @@ def embeddings_page() -> None:
                     with st.spinner("Let's get a little more specific..."):
                         st.write("Skills Asscoiated with the Top 5 Similar Job Titles:")
                         path = Path("src/sql/get_skills_by_onet.sql")
-                        execute_query(
+                        rslt = execute_query(
                             path,  # type: ignore
                             data=None,
                             params={"ONET_CODE": st.session_state.skills},
                         )
-                        st.table(DataFrame(query_result))
+                        st.table(DataFrame(rslt))
